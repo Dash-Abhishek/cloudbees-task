@@ -1,0 +1,41 @@
+syntax="proto3";
+
+option go_package = "github.com/Dash-Abhishek/cloudbees-task/booking";
+
+
+message BookingRequest {
+    string from = 1;
+    string to = 2;
+    User user = 3;
+    int32 price = 5;
+}
+
+message Receipt {
+    int64 id = 1;
+    string from = 2;
+    string to = 3;
+    User user = 4;
+    int32 price = 5;
+    Seat seat = 6;
+}
+
+message Seat {
+    int32 seatNumber = 1;
+    string section = 2;
+}
+
+message User {
+    string firstName = 1;
+    string lastName = 2;
+    string email = 3;
+}
+
+message BookingId{
+    int64 id = 1;
+}
+
+
+service Booking {
+  rpc Create (BookingRequest) returns (Receipt) {}
+  rpc GetReceipt (BookingId) returns (Receipt) {}
+}
