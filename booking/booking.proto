@@ -7,15 +7,14 @@ message BookingRequest {
     string from = 1;
     string to = 2;
     User user = 3;
-    int32 price = 5;
 }
 
 message Receipt {
-    int64 id = 1;
+    string id = 1;
     string from = 2;
     string to = 3;
     User user = 4;
-    int32 price = 5;
+    float price = 5;
     Seat seat = 6;
 }
 
@@ -30,12 +29,35 @@ message User {
     string email = 3;
 }
 
-message BookingId{
-    int64 id = 1;
+message BookingId {
+    string value = 1;
 }
 
+message Section {
+    string name = 1;
+}
+
+message Allocation {
+    string bookingId = 1;
+    User user = 2;
+    Seat seat = 3;
+}
+
+message AllocationList{
+    repeated Allocation allocations = 1;
+}
+
+message UpdateSeatRequest {
+  BookingId bookingId = 1;
+  Seat seat = 2;
+}
+
+message Empty {}
 
 service Booking {
   rpc Create (BookingRequest) returns (Receipt) {}
   rpc GetReceipt (BookingId) returns (Receipt) {}
+  rpc UpdateSeat (UpdateSeatRequest) returns (Receipt) {}
+  rpc Cancel (BookingId) returns (Empty) {}
+  rpc GetSeatAllocations (Section) returns (AllocationList) {}
 }

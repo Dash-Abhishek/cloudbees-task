@@ -24,6 +24,9 @@ const _ = grpc.SupportPackageIsVersion7
 type BookingClient interface {
 	Create(ctx context.Context, in *BookingRequest, opts ...grpc.CallOption) (*Receipt, error)
 	GetReceipt(ctx context.Context, in *BookingId, opts ...grpc.CallOption) (*Receipt, error)
+	UpdateSeat(ctx context.Context, in *UpdateSeatRequest, opts ...grpc.CallOption) (*Receipt, error)
+	Cancel(ctx context.Context, in *BookingId, opts ...grpc.CallOption) (*Empty, error)
+	GetSeatAllocations(ctx context.Context, in *Section, opts ...grpc.CallOption) (*AllocationList, error)
 }
 
 type bookingClient struct {
@@ -52,12 +55,42 @@ func (c *bookingClient) GetReceipt(ctx context.Context, in *BookingId, opts ...g
 	return out, nil
 }
 
+func (c *bookingClient) UpdateSeat(ctx context.Context, in *UpdateSeatRequest, opts ...grpc.CallOption) (*Receipt, error) {
+	out := new(Receipt)
+	err := c.cc.Invoke(ctx, "/Booking/UpdateSeat", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bookingClient) Cancel(ctx context.Context, in *BookingId, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/Booking/Cancel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *bookingClient) GetSeatAllocations(ctx context.Context, in *Section, opts ...grpc.CallOption) (*AllocationList, error) {
+	out := new(AllocationList)
+	err := c.cc.Invoke(ctx, "/Booking/GetSeatAllocations", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BookingServer is the server API for Booking service.
 // All implementations must embed UnimplementedBookingServer
 // for forward compatibility
 type BookingServer interface {
 	Create(context.Context, *BookingRequest) (*Receipt, error)
 	GetReceipt(context.Context, *BookingId) (*Receipt, error)
+	UpdateSeat(context.Context, *UpdateSeatRequest) (*Receipt, error)
+	Cancel(context.Context, *BookingId) (*Empty, error)
+	GetSeatAllocations(context.Context, *Section) (*AllocationList, error)
 	mustEmbedUnimplementedBookingServer()
 }
 
@@ -70,6 +103,15 @@ func (UnimplementedBookingServer) Create(context.Context, *BookingRequest) (*Rec
 }
 func (UnimplementedBookingServer) GetReceipt(context.Context, *BookingId) (*Receipt, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetReceipt not implemented")
+}
+func (UnimplementedBookingServer) UpdateSeat(context.Context, *UpdateSeatRequest) (*Receipt, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateSeat not implemented")
+}
+func (UnimplementedBookingServer) Cancel(context.Context, *BookingId) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Cancel not implemented")
+}
+func (UnimplementedBookingServer) GetSeatAllocations(context.Context, *Section) (*AllocationList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSeatAllocations not implemented")
 }
 func (UnimplementedBookingServer) mustEmbedUnimplementedBookingServer() {}
 
@@ -120,6 +162,60 @@ func _Booking_GetReceipt_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Booking_UpdateSeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateSeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BookingServer).UpdateSeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Booking/UpdateSeat",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BookingServer).UpdateSeat(ctx, req.(*UpdateSeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Booking_Cancel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BookingId)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BookingServer).Cancel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Booking/Cancel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BookingServer).Cancel(ctx, req.(*BookingId))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Booking_GetSeatAllocations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Section)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BookingServer).GetSeatAllocations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Booking/GetSeatAllocations",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BookingServer).GetSeatAllocations(ctx, req.(*Section))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Booking_ServiceDesc is the grpc.ServiceDesc for Booking service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -134,6 +230,18 @@ var Booking_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetReceipt",
 			Handler:    _Booking_GetReceipt_Handler,
+		},
+		{
+			MethodName: "UpdateSeat",
+			Handler:    _Booking_UpdateSeat_Handler,
+		},
+		{
+			MethodName: "Cancel",
+			Handler:    _Booking_Cancel_Handler,
+		},
+		{
+			MethodName: "GetSeatAllocations",
+			Handler:    _Booking_GetSeatAllocations_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
