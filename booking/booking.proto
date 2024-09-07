@@ -7,6 +7,7 @@ message BookingRequest {
     string from = 1;
     string to = 2;
     User user = 3;
+    Seat selectedSeat = 4;
 }
 
 message Receipt {
@@ -29,7 +30,7 @@ message User {
     string email = 3;
 }
 
-message BookingId {
+message UserEmail {
     string value = 1;
 }
 
@@ -48,7 +49,7 @@ message AllocationList{
 }
 
 message UpdateSeatRequest {
-  BookingId bookingId = 1;
+  UserEmail userEmail = 1;
   Seat seat = 2;
 }
 
@@ -56,8 +57,8 @@ message Empty {}
 
 service Booking {
   rpc Create (BookingRequest) returns (Receipt) {}
-  rpc GetReceipt (BookingId) returns (Receipt) {}
+  rpc GetReceipt (UserEmail) returns (Receipt) {}
   rpc UpdateSeat (UpdateSeatRequest) returns (Receipt) {}
-  rpc Cancel (BookingId) returns (Empty) {}
+  rpc Cancel (UserEmail) returns (Empty) {}
   rpc GetSeatAllocations (Section) returns (AllocationList) {}
 }

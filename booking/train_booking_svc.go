@@ -13,8 +13,14 @@ import (
 
 var storage store
 var availableSeats seats
+var SectionIndexMapping = map[string]int{"A": 0, "B": 1}
 var ErrSeatUnavailable = errors.New("Seat not available")
 var ErrBookingNotFound = errors.New("Booking not found")
+var ErrInvalidSeat = errors.New("Invalid seat")
+
+const (
+	MaxSeatNumber = 9
+)
 
 type Booking struct {
 	Id    string
@@ -26,16 +32,13 @@ type Booking struct {
 }
 
 type seats struct {
-	secA      []bool
-	secB      []bool
-	secAIndex int
-	secBIndex int
-	mutex     *sync.Mutex
+	seatGrid [2][10]string
+	mutex    *sync.RWMutex
 }
 
 type store struct {
 	bookings map[string]Booking
-	mutex    *sync.Mutex
+	mutex    *sync.RWMutex
 }
 
 type TrainBookingSvc struct {
@@ -45,15 +48,12 @@ type TrainBookingSvc struct {
 func init() {
 	storage = store{
 		bookings: make(map[string]Booking),
-		mutex:    &sync.Mutex{},
+		mutex:    &sync.RWMutex{},
 	}
 
 	availableSeats = seats{
-		secA:      make([]bool, 10),
-		secB:      make([]bool, 10),
-		secAIndex: 0,
-		secBIndex: 0,
-		mutex:     &sync.Mutex{},
+		seatGrid: [2][10]string{},
+		mutex:    &sync.RWMutex{},
 	}
 }
 
@@ -61,56 +61,97 @@ func init() {
 func (svc *TrainBookingSvc) Create(ctx context.Context, req *BookingRequest) (*Receipt, error) {
 
 	fmt.Println("New Booking request received", req)
+	storage.mutex.Lock()
+	defer storage.mutex.Unlock()
 
-	// Allocating seat
-	seat, err := AllocateSeat()
-	if err != nil {
-		return nil, status.Errorf(codes.ResourceExhausted, err.Error())
+	if _, found := storage.bookings[req.User.Email]; found {
+		return nil, status.Errorf(codes.AlreadyExists, "Booking already exists for user")
 	}
 
 	// Generating bookingID
 	bookingId := uuid.New().String()
-	booking := Booking{
+	newBooking := Booking{
 		Id:    bookingId,
 		User:  req.User,
 		From:  req.From,
 		To:    req.To,
 		Price: 20.0,
-		Seat:  seat,
+		Seat:  req.SelectedSeat,
+	}
+
+	// Allocating seat
+	err := allocateSeat(req.SelectedSeat, newBooking.User.Email)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, err.Error())
 	}
 
 	// Persisting booking
-	storage.mutex.Lock()
-	storage.bookings[bookingId] = booking
-	storage.mutex.Unlock()
+	storage.bookings[newBooking.User.Email] = newBooking
 
-	return booking.toReceipt(), nil
+	return newBooking.GenerateReceipt(), nil
 
 }
 
 // Get receipt for a booking
-func (svc *TrainBookingSvc) GetReceipt(ctx context.Context, bookingId *BookingId) (*Receipt, error) {
+func (svc *TrainBookingSvc) GetReceipt(ctx context.Context, userEmail *UserEmail) (*Receipt, error) {
 
-	fmt.Println("fetching receipt for bookingId:", bookingId)
-	res, found := storage.bookings[bookingId.Value]
+	fmt.Println("fetching receipt for user:", userEmail)
+	res, found := storage.bookings[userEmail.Value]
 	if !found {
-		fmt.Println("Booking not found for ", bookingId)
+		fmt.Println("Booking not found for ", userEmail.Value)
 		return nil, status.Errorf(codes.NotFound, ErrBookingNotFound.Error())
 	}
-	return res.toReceipt(), nil
+	return res.GenerateReceipt(), nil
 
 }
 
-// TODO - Implement this method
+// Update seat for a booking
+// The booking is specified by the booking id
+// The method returns a receipt if the seat is successfully updated
+// Otherwise it returns an error
 func (svc *TrainBookingSvc) UpdateSeat(ctx context.Context, req *UpdateSeatRequest) (*Receipt, error) {
 
-	return nil, nil
+	storage.mutex.Lock()
+	defer storage.mutex.Unlock()
+
+	booking, found := storage.bookings[req.UserEmail.Value]
+	if !found {
+		return nil, status.Errorf(codes.NotFound, ErrBookingNotFound.Error())
+	}
+
+	err := allocateSeat(req.Seat, req.UserEmail.Value)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+	}
+	deAllocateSeat(booking.Seat)
+
+	booking.Seat = req.Seat
+	storage.bookings[req.UserEmail.Value] = booking
+
+	return booking.GenerateReceipt(), nil
+
 }
 
-// TODO - Implement this method
-func (svc *TrainBookingSvc) Cancel(ctx context.Context, id *BookingId) (*Empty, error) {
+// Cancel a booking
+// This method is used to cancel a booking
+// The booking is specified by the booking id
+// The method returns an empty response if the booking is successfully cancelled
+// The method returns an error if the booking is not found
+func (svc *TrainBookingSvc) Cancel(ctx context.Context, userEmail *UserEmail) (*Empty, error) {
 
-	return nil, nil
+	storage.mutex.Lock()
+	defer storage.mutex.Unlock()
+
+	// Check if booking exists
+	booking, found := storage.bookings[userEmail.Value]
+	if !found {
+		return nil, status.Errorf(codes.NotFound, ErrBookingNotFound.Error())
+	}
+
+	delete(storage.bookings, userEmail.Value)
+	deAllocateSeat(booking.Seat)
+
+	return &Empty{}, nil
 }
 
 // Get seat allocations for a section
@@ -121,14 +162,23 @@ func (svc *TrainBookingSvc) GetSeatAllocations(ctx context.Context, section *Sec
 	fmt.Println("fetching seat allocations for sec:", section)
 	results := []*Allocation{}
 
-	for id, booking := range storage.bookings {
-		if booking.Seat.Section == section.Name {
-			results = append(results, &Allocation{
-				BookingId: id,
-				User:      booking.User,
-				Seat:      booking.Seat,
-			})
+	sectionIndex, found := SectionIndexMapping[section.Name]
+	if !found {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid section")
+	}
+
+	for _, bookingId := range availableSeats.seatGrid[sectionIndex] {
+
+		if bookingId == "" {
+			continue
 		}
+
+		bookingDetails := storage.bookings[bookingId]
+		results = append(results, &Allocation{
+			BookingId: bookingDetails.Id,
+			User:      bookingDetails.User,
+			Seat:      bookingDetails.Seat,
+		})
 	}
 
 	return &AllocationList{Allocations: results}, nil
@@ -136,37 +186,47 @@ func (svc *TrainBookingSvc) GetSeatAllocations(ctx context.Context, section *Sec
 }
 
 // Allocate a seat
-// This method is used to allocate a seat for a booking
-// The method returns a seat object if the seat is available
-// Otherwise it returns an error
-func AllocateSeat() (*Seat, error) {
+// The method returns an error if the section is invalid
+// The method returns an error if the seat is invalid
+// The method returns an error if the seat is already allocated
+// The method returns nil if the seat is successfully allocated
+func allocateSeat(selectedSeat *Seat, userId string) error {
 
-	if availableSeats.secAIndex == 10 && availableSeats.secBIndex == 10 {
-		return nil, ErrSeatUnavailable
-	}
-
-	var seatNumber int32
-	var section string
 	availableSeats.mutex.Lock()
 	defer availableSeats.mutex.Unlock()
-
-	if availableSeats.secAIndex < 10 {
-		availableSeats.secA[availableSeats.secAIndex] = true
-		availableSeats.secAIndex++
-		seatNumber = int32(availableSeats.secAIndex)
-		section = "A"
-	} else {
-		availableSeats.secB[availableSeats.secBIndex] = true
-		availableSeats.secBIndex++
-		seatNumber = int32(availableSeats.secBIndex)
-		section = "B"
+	if selectedSeat.Section != "A" && selectedSeat.Section != "B" {
+		return ErrInvalidSeat
 	}
 
-	return &Seat{SeatNumber: seatNumber, Section: section}, nil
+	if selectedSeat.SeatNumber < 0 || selectedSeat.SeatNumber > MaxSeatNumber {
+		return ErrInvalidSeat
+	}
+
+	sectionIndex := SectionIndexMapping[selectedSeat.Section]
+
+	if availableSeats.seatGrid[sectionIndex][selectedSeat.SeatNumber] != "" {
+		return ErrSeatUnavailable
+	}
+
+	availableSeats.seatGrid[sectionIndex][selectedSeat.SeatNumber] = userId
+
+	return nil
 
 }
 
-func (b Booking) toReceipt() *Receipt {
+// Deallocate a seat
+func deAllocateSeat(seat *Seat) {
+
+	availableSeats.mutex.Lock()
+	defer availableSeats.mutex.Unlock()
+
+	sectionIndex := SectionIndexMapping[seat.Section]
+
+	availableSeats.seatGrid[sectionIndex][seat.SeatNumber] = ""
+
+}
+
+func (b Booking) GenerateReceipt() *Receipt {
 	return &Receipt{
 		Id:    b.Id,
 		User:  b.User,
