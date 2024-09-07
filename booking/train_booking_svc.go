@@ -17,6 +17,8 @@ var SectionIndexMapping = map[string]int{"A": 0, "B": 1}
 var ErrSeatUnavailable = errors.New("Seat not available")
 var ErrBookingNotFound = errors.New("Booking not found")
 var ErrInvalidSeat = errors.New("Invalid seat")
+var ErrDuplicateBooking = errors.New("Booking already exists for user")
+var ErrInvalidSection = errors.New("Invalid section")
 
 const (
 	MaxSeatNumber = 9
@@ -65,7 +67,7 @@ func (svc *TrainBookingSvc) Create(ctx context.Context, req *BookingRequest) (*R
 	defer storage.mutex.Unlock()
 
 	if _, found := storage.bookings[req.User.Email]; found {
-		return nil, status.Errorf(codes.AlreadyExists, "Booking already exists for user")
+		return nil, status.Errorf(codes.AlreadyExists, ErrDuplicateBooking.Error())
 	}
 
 	// Generating bookingID
@@ -164,7 +166,7 @@ func (svc *TrainBookingSvc) GetSeatAllocations(ctx context.Context, section *Sec
 
 	sectionIndex, found := SectionIndexMapping[section.Name]
 	if !found {
-		return nil, status.Errorf(codes.InvalidArgument, "Invalid section")
+		return nil, status.Errorf(codes.InvalidArgument, ErrInvalidSection.Error())
 	}
 
 	for _, bookingId := range availableSeats.seatGrid[sectionIndex] {
