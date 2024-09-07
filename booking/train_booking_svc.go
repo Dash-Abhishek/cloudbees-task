@@ -197,7 +197,7 @@ func allocateSeat(selectedSeat *Seat, userId string) error {
 	availableSeats.mutex.Lock()
 	defer availableSeats.mutex.Unlock()
 	if selectedSeat.Section != "A" && selectedSeat.Section != "B" {
-		return ErrInvalidSeat
+		return ErrInvalidSection
 	}
 
 	if selectedSeat.SeatNumber < 0 || selectedSeat.SeatNumber > MaxSeatNumber {

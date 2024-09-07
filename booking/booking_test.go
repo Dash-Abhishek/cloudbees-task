@@ -2,6 +2,7 @@ package booking
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	codes "google.golang.org/grpc/codes"
@@ -65,7 +66,7 @@ var bookingTestTable = []struct {
 			User:         &User{FirstName: "test", LastName: "user", Email: "test@gmail.com"},
 		},
 		ExpectedResponse: nil,
-		ExpectedError:    status.Errorf(codes.InvalidArgument, ErrInvalidSeat.Error()),
+		ExpectedError:    status.Errorf(codes.InvalidArgument, ErrInvalidSection.Error()),
 	},
 }
 
@@ -91,7 +92,7 @@ var receiptTestTable = []struct {
 	},
 }
 
-func TestNewBooking(t *testing.T) {
+func TestBooking(t *testing.T) {
 	bookingSvc := TrainBookingSvc{}
 
 	t.Run("Create Bookings", func(t *testing.T) {
@@ -152,5 +153,59 @@ func TestNewBooking(t *testing.T) {
 		})
 
 	})
+
+}
+
+func TestSeatAllocation(t *testing.T) {
+
+	t.Run("Allocate Seat: Success", func(t *testing.T) {
+
+		seat := &Seat{Section: "A", SeatNumber: 9}
+		err := allocateSeat(seat, "test@gmail.com")
+
+		if err != nil {
+			t.Errorf("expected nil, got %v", err)
+		}
+
+		if availableSeats.seatGrid[0][9] != "test@gmail.com" {
+			t.Errorf("expected user email id, got empty string")
+		}
+		t.Log("Seat allocated successfully")
+	})
+
+	t.Run("Allocate Seat: InvalidSeat", func(t *testing.T) {
+
+		seat := &Seat{Section: "A", SeatNumber: 20}
+		err := allocateSeat(seat, "test@gmail.com")
+		if !errors.Is(err, ErrInvalidSeat) {
+			t.Errorf("expected error %v, got %v", ErrInvalidSeat, err)
+		}
+	})
+
+	t.Run("Allocate Seat: InvalidSection", func(t *testing.T) {
+
+		seat := &Seat{Section: "C", SeatNumber: 2}
+		err := allocateSeat(seat, "test@gmail.com")
+		if !errors.Is(err, ErrInvalidSection) {
+			t.Errorf("expected error %v, got %v", ErrInvalidSection, err)
+		}
+	})
+
+}
+
+func TestDeAllocateSeat(t *testing.T) {
+
+	seat := &Seat{Section: "A", SeatNumber: 7}
+	err := allocateSeat(seat, "test2@gmail.com")
+
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+
+	deAllocateSeat(seat)
+
+	if availableSeats.seatGrid[0][7] != "" {
+		t.Errorf("expected empty string, got user email id")
+	}
 
 }
