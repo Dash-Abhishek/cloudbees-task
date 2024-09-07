@@ -55,6 +55,9 @@ func main() {
 	ListBookings("A")
 	ListBookings("B")
 
+	UpdateBooking()
+
+	CancelBooking()
 }
 
 func CreateBookings() {
@@ -84,6 +87,45 @@ func CreateBookings() {
 
 	}
 	wg.Wait()
+}
+
+func UpdateBooking() {
+
+	conn, err := getConnection()
+	if err != nil {
+		log.Fatalf("failed to not connect: %v", err)
+	}
+	defer conn.Close()
+
+	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(1*time.Second))
+	resp, err := booking.NewBookingClient(conn).UpdateSeat(ctx, &booking.UpdateSeatRequest{
+		UserEmail: &booking.UserEmail{Value: "abhishek@gmail.com"},
+		Seat:      &booking.Seat{Section: "B", SeatNumber: 8},
+	})
+
+	if err != nil {
+		log.Println("Error while updating booking: ", err)
+	} else {
+		fmt.Println("Booking updated: ", resp)
+	}
+
+}
+
+func CancelBooking() {
+
+	conn, err := getConnection()
+	if err != nil {
+		log.Fatalf("failed to not connect: %v", err)
+	}
+	defer conn.Close()
+
+	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(1*time.Second))
+	_, err = booking.NewBookingClient(conn).Cancel(ctx, &booking.UserEmail{Value: "dash@gmail.com"})
+	if err != nil {
+		log.Println("Error while cancelling booking: ", err)
+	} else {
+		fmt.Println("Booking cancelled successfully")
+	}
 }
 
 func FetchReceipt(userEmail string) {

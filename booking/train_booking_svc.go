@@ -97,12 +97,14 @@ func (svc *TrainBookingSvc) Create(ctx context.Context, req *BookingRequest) (*R
 // Get receipt for a booking
 func (svc *TrainBookingSvc) GetReceipt(ctx context.Context, userEmail *UserEmail) (*Receipt, error) {
 
-	fmt.Println("fetching receipt for user:", userEmail)
+	storage.mutex.RLock()
+	defer storage.mutex.RUnlock()
 	res, found := storage.bookings[userEmail.Value]
 	if !found {
 		fmt.Println("Booking not found for ", userEmail.Value)
 		return nil, status.Errorf(codes.NotFound, ErrBookingNotFound.Error())
 	}
+	fmt.Println("Receipt fetched for user: ", userEmail.Value)
 	return res.GenerateReceipt(), nil
 
 }
@@ -130,6 +132,7 @@ func (svc *TrainBookingSvc) UpdateSeat(ctx context.Context, req *UpdateSeatReque
 	booking.Seat = req.Seat
 	storage.bookings[req.UserEmail.Value] = booking
 
+	fmt.Printf("Seat updated for booking: %s updatedSeat: %+v\n", booking.Id, booking.Seat)
 	return booking.GenerateReceipt(), nil
 
 }
@@ -152,7 +155,7 @@ func (svc *TrainBookingSvc) Cancel(ctx context.Context, userEmail *UserEmail) (*
 
 	delete(storage.bookings, userEmail.Value)
 	deAllocateSeat(booking.Seat)
-
+	fmt.Println("Booking cancelled for user: ", userEmail.Value)
 	return &Empty{}, nil
 }
 
@@ -161,7 +164,8 @@ func (svc *TrainBookingSvc) Cancel(ctx context.Context, userEmail *UserEmail) (*
 // The section is specified by the section name
 func (svc *TrainBookingSvc) GetSeatAllocations(ctx context.Context, section *Section) (*AllocationList, error) {
 
-	fmt.Println("fetching seat allocations for sec:", section)
+	availableSeats.mutex.RLock()
+	defer availableSeats.mutex.RUnlock()
 	results := []*Allocation{}
 
 	sectionIndex, found := SectionIndexMapping[section.Name]
@@ -183,6 +187,7 @@ func (svc *TrainBookingSvc) GetSeatAllocations(ctx context.Context, section *Sec
 		})
 	}
 
+	fmt.Printf("Total seats allocated in section %s : %d\n", section.Name, len(results))
 	return &AllocationList{Allocations: results}, nil
 
 }
