@@ -89,7 +89,7 @@ func (svc *TrainBookingSvc) Create(ctx context.Context, req *BookingRequest) (*R
 
 	// Persisting booking
 	storage.bookings[newBooking.User.Email] = newBooking
-
+	fmt.Printf("Booking successful: %s for user: %s\n", newBooking.Id, newBooking.User.Email)
 	return newBooking.GenerateReceipt(), nil
 
 }
