@@ -19,6 +19,8 @@ var ErrBookingNotFound = errors.New("Booking not found")
 var ErrInvalidSeat = errors.New("Invalid seat")
 var ErrDuplicateBooking = errors.New("Booking already exists for user")
 var ErrInvalidSection = errors.New("Invalid section")
+var ErrInvalidBookingRequest = errors.New("Invalid booking request")
+var ErrInvalidUser = errors.New("Invalid user")
 
 const (
 	MaxSeatNumber = 9
@@ -63,6 +65,11 @@ func init() {
 func (svc *TrainBookingSvc) Create(ctx context.Context, req *BookingRequest) (*Receipt, error) {
 
 	fmt.Println("New Booking request received", req)
+
+	if err := req.Validate(); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+	}
+
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
@@ -242,4 +249,40 @@ func (b Booking) GenerateReceipt() *Receipt {
 		Price: b.Price,
 		Seat:  b.Seat,
 	}
+}
+
+func (b *BookingRequest) Validate() error {
+
+	if b.From == "" || b.To == "" || b.User == nil || b.SelectedSeat == nil {
+		return ErrInvalidBookingRequest
+	}
+	if err := b.User.Validate(); err != nil {
+		return err
+	}
+	if err := b.SelectedSeat.Validate(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (u *User) Validate() error {
+
+	if u.FirstName == "" || u.LastName == "" || u.Email == "" {
+		return ErrInvalidUser
+	}
+	return nil
+}
+
+func (s *Seat) Validate() error {
+
+	if s.Section != "A" && s.Section != "B" {
+		return ErrInvalidSection
+	}
+
+	if s.SeatNumber < 0 || s.SeatNumber > MaxSeatNumber {
+		return ErrInvalidSeat
+	}
+
+	return nil
 }
